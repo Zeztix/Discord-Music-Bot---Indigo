@@ -5,7 +5,23 @@ import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
 import yt_dlp as youtube_dl
 import re
+from flask import Flask
+from threading import Thread
 
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "200 OK", 200
+
+def run():
+    app.run(host='0.0.0.0', port=8080)
+
+def start_server():
+    server = Thread(target=run)
+    server.start()
+
+start_server()
 
 intents = discord.Intents.all()
 client = commands.Bot(command_prefix = '=', intents=intents)
