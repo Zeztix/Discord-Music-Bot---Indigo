@@ -38,6 +38,8 @@ sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(client_id=SPOTIPY_CLI
 async def on_ready():
     print('We have logged in as {0.user}'.format(client))
     print('Bot is ready!')
+    activity = discord.Activity(name='Music | =play', type=discord.ActivityType.playing)
+    await client.change_presence(activity=activity)
 
 @client.command(pass_context = True)
 async def join(ctx):
