@@ -100,15 +100,6 @@ async def play(ctx, *, search_query):
             info['entries'][0]['url']
             if not voice_client.is_playing():
                 await play_next_song(ctx, None)
-                # When a link is entered, it will reply with just the name and artist
-                if search_query.startswith('http'):
-                    # Separate the artist and the song name from each other and the rest
-                    split_title = re.split('-|\(', info['entries'][0]['title'])
-                    track_artist = split_title[0].strip()
-                    track_name = split_title[1].strip()
-                    await ctx.send(f'Now Playing: **{track_name}** by **{track_artist}**')
-                else:
-                    await ctx.send(f'Now Playing: **{track_name}** by **{track_artist}** | {track_url}')
             else:
                 await ctx.send('Song queued')
     except Exception as e:
@@ -191,6 +182,7 @@ async def stop(ctx):
 
 @client.command()
 async def skip(ctx, *, url2):
+    # TODO fix this, it doensn't work
     try:
         # Check if the user wants to skip the current song
         url2[0] = url2[1]
