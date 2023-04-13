@@ -7,7 +7,6 @@ import yt_dlp as youtube_dl
 import re
 from flask import Flask
 from threading import Thread
-import asyncio
 
 app = Flask('')
 
