@@ -7,6 +7,7 @@ import yt_dlp as youtube_dl
 import re
 from flask import Flask
 from threading import Thread
+import asyncio
 
 app = Flask('')
 
@@ -24,7 +25,7 @@ def start_server():
 start_server()
 
 intents = discord.Intents.all()
-client = commands.Bot(command_prefix = '=', intents=intents)
+client = commands.Bot(command_prefix = '=', intents=intents, case_insensitive=True)
 
 with open('config.json') as c:
    creds = json.load(c)
@@ -61,6 +62,7 @@ async def leave(ctx):
     else:
         await ctx.send('You are not connected to the vc')
 
+song_queue = []
 @client.command()
 async def play(ctx, *, search_query):
     try:
@@ -76,6 +78,8 @@ async def play(ctx, *, search_query):
             track_url = track['external_urls']['spotify']
             # Search for the YouTube URL
             youtube_url = f'ytsearch:{track_name} {track_artist}'
+
+        song_queue.append(youtube_url)
             
         # Check if the bot is already in the voice channel, otherwise connect
         if ctx.voice_client != None and ctx.voice_client.is_connected():
@@ -89,26 +93,54 @@ async def play(ctx, *, search_query):
             'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
             'options': '-vn',
         }
-        YDL_OPTIONS = {'format': 'bestaudio/best', 'noplaylist': 'True'}
-
+        YDL_OPTIONS = {'format': 'bestaudio/best', 'noplaylist': 'False'}
         with youtube_dl.YoutubeDL(YDL_OPTIONS) as ydl:
             # Extract the info from the youtube URL
             info = ydl.extract_info(youtube_url, download=False)
-            
-            url2 = info['entries'][0]['url']
-            voice_client.play(discord.FFmpegPCMAudio(url2, **FFMPEG_OPTIONS))
-            # When a link is entered, it will reply with just the name and artist
-            if search_query.startswith('http'):
-                # Separate the artist and the song name from each other and the rest
-                split_title = re.split('-|\(', info['entries'][0]['title'])
-                track_artist = split_title[0].strip()
-                track_name = split_title[1].strip()
-                await ctx.send(f'Now Playing: **{track_name}** by **{track_artist}**')
+            info['entries'][0]['url']
+            if not voice_client.is_playing():
+                await play_next_song(ctx, None)
+                # When a link is entered, it will reply with just the name and artist
+                if search_query.startswith('http'):
+                    # Separate the artist and the song name from each other and the rest
+                    split_title = re.split('-|\(', info['entries'][0]['title'])
+                    track_artist = split_title[0].strip()
+                    track_name = split_title[1].strip()
+                    await ctx.send(f'Now Playing: **{track_name}** by **{track_artist}**')
+                else:
+                    await ctx.send(f'Now Playing: **{track_name}** by **{track_artist}** | {track_url}')
             else:
-                await ctx.send(f'Now Playing: **{track_name}** by **{track_artist}** | {track_url}')
+                await ctx.send('Song queued')
     except Exception as e:
         print(e)
         await ctx.send('Something went wrong. Please try again later.')
+
+async def play_next_song(ctx, error):
+    if len(song_queue) > 0:
+        next_song = song_queue.pop(0)
+        FFMPEG_OPTIONS = {
+            'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
+            'options': '-vn',
+        }
+        YDL_OPTIONS = {'format': 'bestaudio/best', 'noplaylist': 'False'}
+        with youtube_dl.YoutubeDL(YDL_OPTIONS) as ydl:
+            info = ydl.extract_info(next_song, download=False)
+            url = info['entries'][0]['url']
+            ctx.voice_client.play(discord.FFmpegPCMAudio(url, **FFMPEG_OPTIONS), after=lambda e: ctx.bot.loop.create_task(play_next_song(ctx, e)))
+            
+            # Separate the artist and the song name from each other and the rest
+            split_title = re.split('-|\(', info['entries'][0]['title'])
+            track_artist = split_title[0].strip()
+            track_name = split_title[1].strip()
+
+            # Search for the track on Spotify
+            result = sp.search(q=f"{track_name} {track_artist}", type="track", limit=1)
+            track = result["tracks"]["items"][0]
+            track_url = track["external_urls"]["spotify"]
+
+            await ctx.send(f'Now Playing: **{track_name}** by **{track_artist}** | {track_url}')
+    if error:
+        print(f"Error while playing song: {error}")
 
 @client.command()
 async def pause(ctx):
@@ -127,7 +159,7 @@ async def pause(ctx):
 
 @client.command()
 async def resume(ctx):
-    # TODO add if statement so if there is no music actually playing it will tell the user there is nothing to resume, otherwise resume music
+    # Check if music is paused and resume music
     server = ctx.message.guild
     voice_channel = server.voice_client
     if ctx.voice_client is not None and ctx.voice_client.is_paused() and ctx.author.voice is not None:
@@ -143,7 +175,7 @@ async def resume(ctx):
 
 @client.command()
 async def stop(ctx):
-    # TODO same thing here, if there is nothing to stop playing, then tell the user, otherwise stop the music
+    # Check if music is playing and stop it
     server = ctx.message.guild
     voice_channel = server.voice_client
     if ctx.voice_client is not None and ctx.voice_client.is_playing() and ctx.author.voice is not None or ctx.voice_client is not None and ctx.voice_client.is_paused() and ctx.author.voice is not None:
@@ -156,6 +188,21 @@ async def stop(ctx):
     else:
         await ctx.send('You are not connected to the vc')
     
+
+@client.command()
+async def skip(ctx, *, url2):
+    try:
+        # Check if the user wants to skip the current song
+        url2[0] = url2[1]
+        FFMPEG_OPTIONS = {
+                'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
+                'options': '-vn',
+            }
+        YDL_OPTIONS = {'format': 'bestaudio/best', 'noplaylist': 'False'}
+        ctx.voice_client.play(discord.FFmpegPCMAudio(url2[1], **FFMPEG_OPTIONS))
+    except Exception as e:
+        print(e)
+        await ctx.send("Couldn't skip song")
 
 # TODO ADD LOOP COMMAND (loop the same song or playlist)
 
