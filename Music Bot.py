@@ -36,7 +36,7 @@ SPOTIPY_CLIENT_SECRET = creds['spotify_secret_id']
 sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(client_id=SPOTIPY_CLIENT_ID, client_secret=SPOTIPY_CLIENT_SECRET))
 
 # Set the maximum number of instances you want to allow
-MAX_INSTANCES = 1  
+MAX_INSTANCES = 2 
 current_instances = 0
 
 @client.event
