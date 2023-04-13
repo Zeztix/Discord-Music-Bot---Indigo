@@ -35,12 +35,31 @@ SPOTIPY_CLIENT_SECRET = creds['spotify_secret_id']
 
 sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(client_id=SPOTIPY_CLIENT_ID, client_secret=SPOTIPY_CLIENT_SECRET))
 
+# Set the maximum number of instances you want to allow
+MAX_INSTANCES = 1  
+current_instances = 0
+
 @client.event
 async def on_ready():
+    global current_instances
+    current_instances += 1
+
+    if current_instances > MAX_INSTANCES - 1:
+        print("Too many instances running. Closing the session.")
+        await client.close()
+    else:
+        print(f"Bot is online. ({current_instances} instances running)")
+
     print('We have logged in as {0.user}'.format(client))
     print('Bot is ready!')
     activity = discord.Activity(name='Music | =play', type=discord.ActivityType.playing)
     await client.change_presence(activity=activity)
+
+@client.event
+async def on_disconnect():
+    global current_instances
+    current_instances -= 1
+    print(f"Bot is offline. ({current_instances} instances running)")
 
 @client.command(pass_context = True)
 async def join(ctx):
