@@ -86,19 +86,27 @@ async def play(ctx, *, search_query):
     try:
         if search_query.startswith('http'):
             # Search for the YouTube URL
-            youtube_url = f'ytsearch:{search_query}'
+            youtube_url = search_query
         else:
-            # Search for the track on Spotify
-            result = sp.search(q=search_query, type='track', limit=1)
-            track = result['tracks']['items'][0]
-            track_name = track['name']
-            track_artist = track['artists'][0]['name']
-            track_url = track['external_urls']['spotify']
-            # Search for the YouTube URL
-            youtube_url = f'ytsearch:{track_name} {track_artist}'
+            # Search for the top 5 results
+            youtube_url = f'ytsearch5:{search_query}'
 
-        song_queue.append(youtube_url)
-            
+        # song_queue.append(youtube_url)
+
+        YDL_OPTIONS = {'format': 'bestaudio/best', 'noplaylist': 'True'}
+
+        with youtube_dl.YoutubeDL(YDL_OPTIONS) as ydl:
+            info = ydl.extract_info(youtube_url, download=False)
+            search_results = info['entries'][:5]
+
+            # Construct a message with the search results
+            result_message = "Top 5 results:\n"
+            for index, entry in enumerate(search_results, 1):
+                title = entry.get('title', 'No title available')
+                result_message += f"{index}. {title}\n"
+
+            await ctx.send(result_message)
+
         # Check if the bot is already in the voice channel, otherwise connect
         if ctx.voice_client != None and ctx.voice_client.is_connected():
             voice_client = ctx.voice_client
@@ -106,68 +114,73 @@ async def play(ctx, *, search_query):
             channel = ctx.author.voice.channel
             voice_client = await channel.connect()
         
-        # Download and play the song from YouTube
-        FFMPEG_OPTIONS = {
-            'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
-            'options': '-vn',
-        }
-        YDL_OPTIONS = {'format': 'bestaudio/best', 'noplaylist': 'False'}
-        with youtube_dl.YoutubeDL(YDL_OPTIONS) as ydl:
-            # Extract the info from the youtube URL
-            info = ydl.extract_info(youtube_url, download=False)
-            info['entries'][0]['url']
-            if not voice_client.is_playing():
-                await play_next_song(ctx, None)
-            else:
-                await ctx.send('Song queued')
+    #     # Download and play the song from YouTube
+    #     FFMPEG_OPTIONS = {
+    #         'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
+    #         'options': '-vn',
+    #     }
+        
+    #     with youtube_dl.YoutubeDL(YDL_OPTIONS) as ydl:
+
+    #         # Extract the info from the youtube URL
+    #         info = ydl.extract_info(youtube_url, download=False)
+    #         info['entries'][0]['url']
+
+    #         if not voice_client.is_playing():
+    #             await play_next_song(ctx, None)
+    #         else:
+    #             await ctx.send('Song queued')
+
     except Exception as e:
         print(e)
         await ctx.send('Something went wrong. Please try again later.')
 
-async def play_next_song(ctx, error):
-    if len(song_queue) > 0:
-        next_song = song_queue.pop(0)
-        FFMPEG_OPTIONS = {
-            'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
-            'options': '-vn',
-        }
-        YDL_OPTIONS = {'format': 'bestaudio/best', 'noplaylist': 'False'}
-        with youtube_dl.YoutubeDL(YDL_OPTIONS) as ydl:
-            info = ydl.extract_info(next_song, download=False)
-            url = info['entries'][0]['url']
-            ctx.voice_client.play(discord.FFmpegPCMAudio(url, **FFMPEG_OPTIONS), after=lambda e: ctx.bot.loop.create_task(play_next_song(ctx, e)))
+# async def play_next_song(ctx, error):
+
+#     if len(song_queue) > 0:
+#         next_song = song_queue.pop(0)
+#         FFMPEG_OPTIONS = {
+#             'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
+#             'options': '-vn',
+#         }
+#         YDL_OPTIONS = {'format': 'bestaudio/best', 'noplaylist': 'False'}
+
+#         with youtube_dl.YoutubeDL(YDL_OPTIONS) as ydl:
+#             info = ydl.extract_info(next_song, download=False)
+#             url = info['entries'][0]['url']
+#             yt_url = info['entries'][0]['webpage_url']
+
+#             # Play the requested song
+#             ctx.voice_client.play(discord.FFmpegPCMAudio(url, **FFMPEG_OPTIONS), after=lambda e: ctx.bot.loop.create_task(play_next_song(ctx, e)))
             
-            # Separate the artist and the song name from each other and the rest
-            split_title = re.split('-|\(', info['entries'][0]['title'])
-            track_artist = split_title[0].strip()
-            track_name = split_title[1].strip()
+#             # Send the URL of the YouTube video being played to the channel
+#             await ctx.send(f'Now Playing: ', yt_url)
 
-            # Search for the track on Spotify
-            result = sp.search(q=f"{track_name} {track_artist}", type="track", limit=1)
-            track = result["tracks"]["items"][0]
-            track_url = track["external_urls"]["spotify"]
-
-            await ctx.send(f'Now Playing: **{track_name}** by **{track_artist}** | {track_url}')
-    if error:
-        print(f"Error while playing song: {error}")
+#     if error:
+#         print(f"Error while playing song: {error}")
 
 @client.command()
 async def pause(ctx):
+
     # Checks if the user or the bot is vc, or if the bot is playing music
     server = ctx.message.guild
     voice_channel = server.voice_client
     if ctx.voice_client is not None and ctx.voice_client.is_playing() and ctx.author.voice is not None:
         voice_channel.pause()
         await ctx.send('Music paused')
+
     elif ctx.voice_client is not None and ctx.author.voice is not None:
         await ctx.send('There is no music playing currently')
+
     elif ctx.voice_client is None and ctx.author.voice is not None:
         await ctx.send('I am not connected to a vc')
+
     else:
         await ctx.send('You are not connected to the vc')
 
 @client.command()
 async def resume(ctx):
+
     # Check if music is paused and resume music
     server = ctx.message.guild
     voice_channel = server.voice_client
